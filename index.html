@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>QR Attendance Scanner</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <!-- QR Scanner Library -->
+  <script src="https://unpkg.com/html5-qrcode"></script>
+
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: #0f172a;
+      color: #ffffff;
+      text-align: center;
+    }
+    h2 {
+      margin: 10px 0;
+    }
+    #reader {
+      width: 320px;
+      margin: auto;
+      margin-top: 10px;
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    #status {
+      margin-top: 12px;
+      font-size: 18px;
+      font-weight: bold;
+    }
+    .ok { color: #22c55e; }
+    .dup { color: #facc15; }
+    .err { color: #ef4444; }
+  </style>
+</head>
+
+<body>
+
+<h2>QR Attendance Scanner</h2>
+<div id="reader"></div>
+<div id="status">Waiting for scan…</div>
+
+<script>
+  // 🔗 YOUR GOOGLE APPS SCRIPT URL
+  const SCRIPT_URL =
+    "https://script.google.com/macros/s/AKfycbwELU9JAKcHFSgo0ksQPA_n9tazjXlsdMPyxUQ2AS_Ci8f6JTFQ5k8rSPKDf_7I5GaH/exec";
+
+  let lastScan = "";
+  let scannedSet = new Set(); // duplicate prevention
+
+  function sendToSheet(qr) {
+    fetch(SCRIPT_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: "qr_data=" + encodeURIComponent(qr)
+    }).catch(() => {});
+  }
+
+  function beep() {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    osc.type = "sine";
+    osc.frequency.value = 900;
+    osc.connect(ctx.destination);
+    osc.start();
+    setTimeout(() => osc.stop(), 100);
+  }
+
+  const scanner = new Html5Qrcode("reader");
+
+  scanner.start(
+    { facingMode: "environment" },
+    { fps: 10, qrbox: 250 },
+    (qrText) => {
+      if (qrText === lastScan) return;
+
+      lastScan = qrText;
+
+      // 🔁 Duplicate prevention
+      if (scannedSet.has(qrText)) {
+        document.getElementById("status").innerHTML =
+          "Already scanned: " + qrText;
+        document.getElementById("status").className = "dup";
+        navigator.vibrate(60);
+        setTimeout(() => lastScan = "", 1200);
+        return;
+      }
+
+      scannedSet.add(qrText);
+      sendToSheet(qrText);
+
+      document.getElementById("status").innerHTML =
+        "Scanned ✔ : " + qrText;
+      document.getElementById("status").className = "ok";
+
+      navigator.vibrate(120);
+      beep();
+
+      // Allow next scan quickly
+      setTimeout(() => lastScan = "", 1000);
+    },
+    () => {}
+  );
+</script>
+
+</body>
+</html>
